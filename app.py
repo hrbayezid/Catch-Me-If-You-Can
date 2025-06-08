@@ -1,48 +1,53 @@
-from xgboost import XGBClassifier
-import pandas as pd
 import streamlit as st
+import pandas as pd
+from xgboost import XGBClassifier
 
-# Load trained model
 model = XGBClassifier()
-model.load_model("fraud_model.json")  # 🧠 This works only if it was fitted and saved like above!
+model.load_model("fraud_model.json")  
 
-# Prediction function
 def predict(data):
     return model.predict(data)
 
-# Streamlit UI
 st.title("💳 Fraud Detection App")
-uploaded_file = st.file_uploader("Upload transaction CSV file", type=["csv"])
+
+st.markdown("""
+Upload a **CSV file** with 31 features (like `creditcard.csv`) to check for fraud.
+
+Required columns: `Time`, `V1` to `V28`, `Amount`, `Hour`
+
+ Download sample dataset from [Kaggle](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
+""")
+
+uploaded_file = st.file_uploader("Upload your CSV file here", type=["csv"])
 
 if uploaded_file:
     data = pd.read_csv(uploaded_file)
 
-    # Make sure 'Hour' exists (generate if not)
+    # If 'Hour' column not there, create it from 'Time'
     if 'Hour' not in data.columns:
         data['Hour'] = (data['Time'] // 3600) % 24
 
-    # Drop 'Class' if user uploaded with it
+    # If 'Class' is there (actual labels), remove it
     if 'Class' in data.columns:
         data = data.drop('Class', axis=1)
 
+    # When user clicks "Predict" button
     if st.button("Predict"):
+        # Check if file has exactly 31 columns (as expected by model)
         if data.shape[1] == 31:
-            predictions = predict(data)
-            
-            # Add predictions as a new column to the dataframe
-            data['Prediction'] = predictions
-            
-            # Filter only frauds (Prediction == 1)
+            predictions = predict(data)  # Make prediction
+            data['Prediction'] = predictions  # Add predictions to the data
+
+            # Filter only predicted frauds
             frauds = data[data['Prediction'] == 1]
-            
-            # Show frauds if any found
+
+            # Show results
             if not frauds.empty:
-                st.write(f"🚨 Detected **{len(frauds)}** fraud transactions out of {len(data)} total.")
-                fraud_percentage = (len(frauds) / len(data)) * 100
-                st.write(f"⚠️ Fraud percentage: {fraud_percentage:.2f}%")
-                st.dataframe(frauds.drop(columns=['Prediction']))  # show features only, no prediction col
-                
+                st.write(f" Found **{len(frauds)}** fraud transactions out of {len(data)}.")
+                percent = (len(frauds) / len(data)) * 100
+                st.write(f" Fraud percentage: {percent:.2f}%")
+                st.dataframe(frauds.drop(columns=['Prediction']))  # Show frauds only
             else:
-                st.write("🎉 No fraud detected in the uploaded transactions!")
+                st.write(" No fraud found in your data! Party safe!")
         else:
-            st.error(f"Uploaded file has {data.shape[1]} columns, expected 31.")
+            st.error(f" File has {data.shape[1]} columns. It should have 31 for prediction to work.")
